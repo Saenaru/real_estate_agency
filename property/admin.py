@@ -6,8 +6,8 @@ from .models import Flat
 
 class FlatAdmin(admin.ModelAdmin):
     search_fields = ['town', 'address', 'owner']
-    list_display = ['address', 'price', 'town', 'owner', 'created_at']
-    list_filter = ['created_at']
+    list_display = ['address', 'price', 'town', 'owner', 'created_at', 'new_building']
+    list_filter = ['created_at', 'new_building']
     readonly_fields = ['created_at']
     fieldsets = [
         (None, {
@@ -16,7 +16,8 @@ class FlatAdmin(admin.ModelAdmin):
         ('Информация о квартире', {
             'fields': ['description', 'price', 'town', 'town_district', 
                       'address', 'floor', 'rooms_number', 'living_area',
-                      'has_balcony', 'active', 'construction_year']
+                      'has_balcony', 'active', 'construction_year',
+                      'new_building']
         }),
         ('Метаданные', {
             'fields': ['created_at'],
