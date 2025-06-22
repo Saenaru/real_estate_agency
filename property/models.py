@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 
 class Flat(models.Model):
     owner = models.CharField('ФИО владельца', max_length=200)
@@ -53,5 +55,46 @@ class Flat(models.Model):
         blank=True,
         db_index=True)
 
+    complaints = models.ManyToManyField(
+        User,
+        through='Complaint',
+        related_name='complained_flats',
+        verbose_name='Жалобы',
+        blank=True
+    )
+
     def __str__(self):
         return f'{self.town}, {self.address} ({self.price}р.)'
+
+    def save(self, *args, **kwargs):
+        if self.construction_year is not None:
+            self.new_building = self.construction_year >= 2015
+        super().save(*args, **kwargs)
+
+
+class Complaint(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        verbose_name='Кто жаловался'
+    )
+    flat = models.ForeignKey(
+        Flat,
+        on_delete=models.CASCADE,
+        verbose_name='Квартира, на которую пожаловались'
+    )
+    text = models.TextField(
+        verbose_name='Текст жалобы',
+        blank=True
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Дата и время создания жалобы'
+    )
+
+    def __str__(self):
+        return f'Жалоба от {self.user} на квартиру {self.flat}'
+
+    class Meta:
+        verbose_name = 'Жалоба'
+        verbose_name_plural = 'Жалобы'
