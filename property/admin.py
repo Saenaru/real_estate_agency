@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 from .models import Flat, Complaint
 
+
+
 class ComplaintInline(admin.TabularInline):
     model = Complaint
     extra = 0
@@ -11,6 +13,13 @@ class ComplaintInline(admin.TabularInline):
     verbose_name = _('Жалоба')
     verbose_name_plural = _('Жалобы')
 
+class LikeInline(admin.TabularInline):
+    model = Flat.liked_by.through
+    extra = 1
+    raw_id_fields = ('user',)
+    verbose_name = _('Лайк')
+    verbose_name_plural = _('Лайки')
+
 @admin.register(Flat)
 class FlatAdmin(admin.ModelAdmin):
     list_display = [
@@ -18,6 +27,7 @@ class FlatAdmin(admin.ModelAdmin):
         'price',
         'town',
         'new_building',
+        'display_likes_count',
         'construction_year',
         'display_complaints_count'
     ]
@@ -25,11 +35,19 @@ class FlatAdmin(admin.ModelAdmin):
     search_fields = ['town', 'address', 'owner']
     list_filter = ['new_building', 'town', 'construction_year']
     readonly_fields = ['created_at']
-    inlines = [ComplaintInline]  # Убрали raw_id_fields для owner, так как это не ForeignKey
+    inlines = [ComplaintInline]
+    raw_id_fields = ['liked_by']
+    filter_horizontal = ('liked_by',)
     
     def display_complaints_count(self, obj):
         return obj.complaints.count()
     display_complaints_count.short_description = _('Количество жалоб')
+
+    def display_likes_count(self, obj):
+        return obj.liked_by.count()
+    display_likes_count.short_description = _('Лайков')
+
+    
 
 @admin.register(Complaint)
 class ComplaintAdmin(admin.ModelAdmin):
