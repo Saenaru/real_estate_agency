@@ -2,8 +2,9 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from phonenumber_field.modelfields import PhoneNumberField
-from phonenumbers import NumberParseException
+from phonenumbers import format_number, PhoneNumberFormat, parse, is_valid_number, NumberParseException
 from django.core.exceptions import ValidationError
+import re
 
 User = get_user_model()
 
@@ -14,6 +15,12 @@ class Flat(models.Model):
         region='RU',
         blank=True,
         help_text='Номер в формате +7XXXXXXXXXX'
+    )
+    owner_pure_phone = PhoneNumberField(
+    'Нормализованный номер владельца',
+    region='RU',
+    blank=True,
+    null=True
     )
     created_at = models.DateTimeField(
         'Когда создано объявление',
@@ -82,6 +89,59 @@ class Flat(models.Model):
 
     def __str__(self):
         return f'{self.town}, {self.address} ({self.price}р.)'
+    
+    def clean(self):
+        super().clean()
+        if self.owner_phone:
+            phone_str = str(self.owner_phone)
+            
+            if self.is_definitely_invalid(phone_str):
+                raise ValidationError({
+                    'owner_phone': 'Номер телефона содержит недопустимую последовательность цифр'
+                })
+                
+            try:
+                parsed = parse(phone_str, 'RU')
+                if not is_valid_number(parsed):
+                    raise ValidationError({
+                        'owner_phone': 'Укажите корректный российский номер в формате +7XXXXXXXXXX'
+                    })
+            except NumberParseException:
+                raise ValidationError({
+                    'owner_phone': 'Неверный формат номера телефона'
+                })
+
+    @staticmethod
+    def is_definitely_invalid(phone_str):
+        """Определяет заведомо невалидные номера"""
+        clean_phone = re.sub(r'[^0-9]', '', phone_str)
+        
+        invalid_patterns = [
+            r'^0+$',
+            r'^123456',
+            r'(\d)\1{5}',
+            r'^555555',
+            r'^999999'
+        ]
+        
+        return any(re.search(pattern, clean_phone) for pattern in invalid_patterns)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        
+        if self.owner_phone and not self.is_definitely_invalid(str(self.owner_phone)):
+            try:
+                parsed = parse(str(self.owner_phone), 'RU')
+                if is_valid_number(parsed):
+                    self.owner_pure_phone = self.owner_phone
+                else:
+                    self.owner_pure_phone = None
+            except NumberParseException:
+                self.owner_pure_phone = None
+        else:
+            self.owner_pure_phone = None
+            
+        super().save(*args, **kwargs)
 
     def clean(self):
         if self.owner_phone:
@@ -95,11 +155,24 @@ class Flat(models.Model):
                 raise ValidationError({
                     'owner_phone': 'Номер телефона содержит недопустимую последовательность цифр'
                 })
+            
+    def get_formatted_phone(self):
+        """Возвращает номер в формате +7 (XXX) XXX-XX-XX"""
+        if not self.owner_phone:
+            return ""
+        return format_number(self.owner_phone, PhoneNumberFormat.INTERNATIONAL)
+    
+    get_formatted_phone.short_description = "Номер владельца"
 
     def save(self, *args, **kwargs):
         if self.construction_year is not None:
             self.new_building = self.construction_year >= 2015
         self.full_clean()
+        super().save(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        if self.owner_phone:
+            self.owner_pure_phone = self.owner_phone
         super().save(*args, **kwargs)
 
 

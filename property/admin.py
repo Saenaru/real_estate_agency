@@ -26,11 +26,23 @@ class FlatAdmin(admin.ModelAdmin):
         'address',
         'price',
         'town',
-        'owner_phone',
+        'get_formatted_phone',
+        'owner_pure_phone',
         'new_building',
         'display_likes_count',
         'construction_year',
         'display_complaints_count'
+    ]
+    fieldsets = [
+        ('Основная информация', {
+            'fields': [
+                'address',
+                'price',
+                'town',
+                ('owner', 'owner_phone'),
+                'new_building'
+            ]
+        }),
     ]
     list_editable = ['new_building']
     search_fields = ['town', 'address', 'owner']
@@ -48,6 +60,16 @@ class FlatAdmin(admin.ModelAdmin):
         return obj.liked_by.count()
     display_likes_count.short_description = _('Лайков')
 
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        for fieldset in fieldsets:
+            if 'fields' in fieldset[1]:
+                fieldset[1]['fields'] = [
+                    f for f in fieldset[1]['fields'] 
+                    if f != 'owner_pure_phone'
+                ]
+        return fieldsets
+
     
 
 @admin.register(Complaint)
@@ -64,7 +86,7 @@ class ComplaintAdmin(admin.ModelAdmin):
         'flat__address',
         'text'
     ]
-    raw_id_fields = ['user', 'flat']  # Здесь правильно - оба поля являются ForeignKey
+    raw_id_fields = ['user', 'flat']
     readonly_fields = ['created_at']
     date_hierarchy = 'created_at'
     
