@@ -1,4 +1,3 @@
-# property/migrations/0008_add_owner_pure_phone.py
 from django.db import migrations
 import phonenumber_field.modelfields
 
