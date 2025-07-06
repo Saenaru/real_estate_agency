@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
-from .models import Flat, Complaint
+from .models import Flat, Complaint, Owner
 
 
 
@@ -93,3 +93,9 @@ class ComplaintAdmin(admin.ModelAdmin):
     def truncated_text(self, obj):
         return obj.text[:50] + '...' if len(obj.text) > 50 else obj.text
     truncated_text.short_description = _('Текст жалобы')
+
+@admin.register(Owner)
+class OwnerAdmin(admin.ModelAdmin):
+    list_display = ['full_name', 'phone', 'pure_phone']
+    search_fields = ['full_name', 'phone', 'pure_phone']
+    raw_id_fields = ['flats']
