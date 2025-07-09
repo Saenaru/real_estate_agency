@@ -36,7 +36,7 @@ class OwnerThroughInline(admin.TabularInline):
     owner_link.short_description = _('ФИО')
 
     def owner_phone(self, instance):
-        return instance.owner.phone
+        return instance.owner.pure_phone
     owner_phone.short_description = _('Телефон')
 
     def owner_pure_phone(self, instance):
@@ -49,6 +49,7 @@ class FlatAdmin(admin.ModelAdmin):
         'address',
         'price',
         'town',
+        'display_owner_name',
         'display_owner_phone',
         'display_pure_phone',
         'new_building',
@@ -56,24 +57,42 @@ class FlatAdmin(admin.ModelAdmin):
         'construction_year',
         'display_complaints_count'
     ]
+    
     fieldsets = [
         ('Основная информация', {
             'fields': [
                 'address',
                 'price',
                 'town',
-                ('owner', 'owner_phone'),
-                'new_building'
+                'new_building',
+                'construction_year',
+                'created_at'
             ]
         }),
     ]
+    
     list_editable = ['new_building']
-    search_fields = ['town', 'address', 'owner']
+    search_fields = ['town', 'address', 'owners__full_name']
     list_filter = ['new_building', 'town', 'construction_year']
     readonly_fields = ['created_at']
     inlines = [ComplaintInline, OwnerThroughInline]
-    raw_id_fields = ['liked_by']  # Убрал 'owner' так как это не ForeignKey
+    raw_id_fields = ['liked_by']
     filter_horizontal = ('liked_by',)
+
+    def display_owner_name(self, obj):
+        owner = obj.owners.first()
+        return owner.full_name if owner else "Не указан"
+    display_owner_name.short_description = 'Владелец'
+
+    def display_owner_phone(self, obj):
+        owner = obj.owners.first()
+        return str(owner.pure_phone) if owner and owner.pure_phone else "-"
+    display_owner_phone.short_description = 'Номер владельца'
+    
+    def display_pure_phone(self, obj):
+        owner = obj.owners.first()
+        return owner.pure_phone if owner else "-"
+    display_pure_phone.short_description = 'Нормализованный номер'
 
     def display_complaints_count(self, obj):
         return obj.complaints.count()
@@ -85,18 +104,6 @@ class FlatAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related('owners')
-
-    def display_owner_phone(self, obj):
-        return obj.owner_phone if obj.owner_phone else "-"
-    display_owner_phone.short_description = 'Номер владельца'
-    
-    def display_pure_phone(self, obj):
-        return obj.owner_pure_phone if obj.owner_pure_phone else "-"
-    display_pure_phone.short_description = 'Нормализованный номер'
-
-    def save_model(self, request, obj, form, change):
-        super().save_model(request, obj, form, change)
-        obj.save()
 
 @admin.register(Complaint)
 class ComplaintAdmin(admin.ModelAdmin):
@@ -125,7 +132,7 @@ class OwnerAdmin(admin.ModelAdmin):
     list_display = ['full_name', 'display_phone', 'flats_count']
     search_fields = ['full_name', 'pure_phone']
     raw_id_fields = ['flats']
-    fields = ['full_name', 'pure_phone', 'flats']
+    filter_horizontal = ('flats',)
     
     def display_phone(self, obj):
         return obj.pure_phone.as_international if obj.pure_phone else "Не указан"
@@ -134,7 +141,3 @@ class OwnerAdmin(admin.ModelAdmin):
     def flats_count(self, obj):
         return obj.flats.count()
     flats_count.short_description = 'Количество квартир'
-
-    def save_model(self, request, obj, form, change):
-        super().save_model(request, obj, form, change)
-        obj.save()

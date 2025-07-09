@@ -4,26 +4,11 @@ from django.contrib.auth import get_user_model
 from phonenumber_field.modelfields import PhoneNumberField
 from phonenumbers import format_number, PhoneNumberFormat, parse, is_valid_number, NumberParseException
 from django.core.exceptions import ValidationError
-from django.db.models.signals import post_save, pre_save
-from django.dispatch import receiver
 import re
 
 User = get_user_model()
 
 class Flat(models.Model):
-    owner = models.CharField('ФИО владельца', max_length=200)
-    owner_phone = PhoneNumberField(
-        'Номер владельца',
-        region='RU',
-        blank=True,
-        help_text='Номер в формате +7XXXXXXXXXX'
-    )
-    owner_pure_phone = PhoneNumberField(
-    'Нормализованный номер владельца',
-    region='RU',
-    blank=True,
-    null=True
-    )
     created_at = models.DateTimeField(
         'Когда создано объявление',
         default=timezone.now,
@@ -89,103 +74,32 @@ class Flat(models.Model):
         blank=True
     )
 
-    def update_owner_info(self):
+    @property
+    def owner(self):
         owner = self.owners.first()
-        if owner:
-            self.owner = owner.full_name
-            self.owner_pure_phone = owner.pure_phone
-            self.save()
+        return owner.full_name if owner else "Не указан"
+
+    @property
+    def owner_phone(self):
+        owner = self.owners.first()
+        return str(owner.pure_phone) if owner and owner.pure_phone else ""
+
+    @property
+    def owner_pure_phone(self):
+        owner = self.owners.first()
+        return owner.pure_phone if owner else None
 
     def __str__(self):
         return f'{self.town}, {self.address} ({self.price}р.)'
-    
-    def clean(self):
-        super().clean()
-        if self.owner_phone:
-            phone_str = str(self.owner_phone)
-            
-            if self.is_definitely_invalid(phone_str):
-                raise ValidationError({
-                    'owner_phone': 'Номер телефона содержит недопустимую последовательность цифр'
-                })
-                
-            try:
-                parsed = parse(phone_str, 'RU')
-                if not is_valid_number(parsed):
-                    raise ValidationError({
-                        'owner_phone': 'Укажите корректный российский номер в формате +7XXXXXXXXXX'
-                    })
-            except NumberParseException:
-                raise ValidationError({
-                    'owner_phone': 'Неверный формат номера телефона'
-                })
-
-    @staticmethod
-    def is_definitely_invalid(phone_str):
-        """Определяет заведомо невалидные номера"""
-        clean_phone = re.sub(r'[^0-9]', '', phone_str)
-        
-        invalid_patterns = [
-            r'^0+$',
-            r'^123456',
-            r'(\d)\1{5}',
-            r'^555555',
-            r'^999999'
-        ]
-        
-        return any(re.search(pattern, clean_phone) for pattern in invalid_patterns)
-
-    def save(self, *args, **kwargs):
-        if self.owner_pure_phone:
-            self.owner_phone = str(self.owner_pure_phone)
-        elif self.owner_phone:
-            try:
-                self.owner_pure_phone = self.owner_phone
-            except:
-                self.owner_pure_phone = None
-        
-        super().save(*args, **kwargs)
-        
-        for owner in self.owners.all():
-            if (owner.pure_phone != self.owner_pure_phone or 
-                owner.full_name != self.owner):
-                Owner.objects.filter(pk=owner.pk).update(
-                    pure_phone=self.owner_pure_phone,
-                    full_name=self.owner
-                )
-
-    def clean(self):
-        if self.owner_phone:
-            if (self.owner_phone.country_code != 7 or 
-                str(self.owner_phone.national_number).startswith('0')):
-                raise ValidationError({
-                    'owner_phone': 'Укажите корректный российский номер в формате +7XXXXXXXXXX'
-                })
-            
-            if '000000' in str(self.owner_phone.national_number):
-                raise ValidationError({
-                    'owner_phone': 'Номер телефона содержит недопустимую последовательность цифр'
-                })
-            
-    def get_formatted_phone(self):
-        """Возвращает номер в формате +7 (XXX) XXX-XX-XX"""
-        if not self.owner_phone:
-            return ""
-        return format_number(self.owner_phone, PhoneNumberFormat.INTERNATIONAL)
-    
-    get_formatted_phone.short_description = "Номер владельца"
 
     def save(self, *args, **kwargs):
         if self.construction_year is not None:
             self.new_building = self.construction_year >= 2015
-        self.full_clean()
         super().save(*args, **kwargs)
 
-    def save(self, *args, **kwargs):
-        if self.owner_phone:
-            self.owner_pure_phone = self.owner_phone
-        super().save(*args, **kwargs)
-
+    class Meta:
+        verbose_name = 'Квартира'
+        verbose_name_plural = 'Квартиры'
 
 class Complaint(models.Model):
     user = models.ForeignKey(
@@ -219,7 +133,7 @@ class Complaint(models.Model):
 class Owner(models.Model):
     full_name = models.CharField('ФИО владельца', max_length=200)
     pure_phone = PhoneNumberField(
-        'Номер владельца',  # Изменили verbose_name
+        'Номер владельца',
         blank=True,
         max_length=128,
         region='RU',
@@ -234,69 +148,6 @@ class Owner(models.Model):
     def __str__(self):
         return f'{self.full_name} ({self.pure_phone if self.pure_phone else "нет телефона"})'
 
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        
-        for flat in self.flats.all():
-            update_fields = {}
-            if flat.owner != self.full_name:
-                update_fields['owner'] = self.full_name
-            if flat.owner_pure_phone != self.pure_phone:
-                update_fields['owner_pure_phone'] = self.pure_phone
-                update_fields['owner_phone'] = str(self.pure_phone) if self.pure_phone else ""
-            
-            if update_fields:
-                Flat.objects.filter(pk=flat.pk).update(**update_fields)
-
     class Meta:
         verbose_name = 'Собственник'
         verbose_name_plural = 'Собственники'
-
-@receiver(post_save, sender=Owner)
-def update_related_flats(sender, instance, **kwargs):
-    for flat in instance.flats.all():
-        flat.owner = instance.full_name
-        flat.owner_phone = str(instance.pure_phone) if instance.pure_phone else ""
-        flat.owner_pure_phone = instance.pure_phone
-        flat.save(update_fields=['owner', 'owner_phone', 'owner_pure_phone'])
-
-@receiver(pre_save, sender=Flat)
-def update_owner_from_flat(sender, instance, **kwargs):
-    """Обновляет Owner при изменении номера в Flat"""
-    if instance.pk:  # Только для существующих записей
-        try:
-            # Находим связанного собственника
-            owner = instance.owners.first()
-            if owner:
-                # Обновляем только если номер действительно изменился
-                if (str(instance.owner_pure_phone) != str(owner.pure_phone) or 
-                    instance.owner != owner.full_name):
-                    owner.full_name = instance.owner
-                    owner.pure_phone = instance.owner_pure_phone
-                    owner.save()
-        except Exception as e:
-            print(f"Ошибка при обновлении Owner: {e}")
-
-@receiver(post_save, sender=Owner)
-def update_flats_from_owner(sender, instance, **kwargs):
-    """Обновляет все связанные Flat при изменении Owner"""
-    for flat in instance.flats.all():
-        needs_update = False
-        if flat.owner != instance.full_name:
-            flat.owner = instance.full_name
-            needs_update = True
-        if flat.owner_pure_phone != instance.pure_phone:
-            flat.owner_pure_phone = instance.pure_phone
-            needs_update = True
-        if needs_update:
-            flat.save()
-
-@receiver(pre_save, sender=Flat)
-def sync_phone_fields(sender, instance, **kwargs):
-    if instance.owner_pure_phone and not instance.owner_phone:
-        instance.owner_phone = str(instance.owner_pure_phone)
-    elif instance.owner_phone and not instance.owner_pure_phone:
-        try:
-            instance.owner_pure_phone = instance.owner_phone
-        except:
-            instance.owner_pure_phone = None
