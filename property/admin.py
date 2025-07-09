@@ -22,26 +22,23 @@ class LikeInline(admin.TabularInline):
 
 class OwnerThroughInline(admin.TabularInline):
     model = Owner.flats.through
-    extra = 0
+    extra = 1
     raw_id_fields = ('owner',)
     verbose_name = _('Собственник')
     verbose_name_plural = _('Собственники')
-    readonly_fields = ('owner_link', 'owner_phone', 'owner_pure_phone')
-    fields = ('owner_link', 'owner_phone', 'owner_pure_phone')
+    readonly_fields = ('owner_link', 'owner_pure_phone')
+    fields = ('owner', 'owner_link', 'owner_pure_phone')
 
     def owner_link(self, instance):
-        owner = instance.owner
-        url = reverse('admin:property_owner_change', args=[owner.id])
-        return format_html('<a href="{}">{}</a>', url, owner.full_name)
+        if instance and instance.owner:
+            url = reverse('admin:property_owner_change', args=[instance.owner.id])
+            return format_html('<a href="{}">{}</a>', url, instance.owner.full_name)
+        return "-"
     owner_link.short_description = _('ФИО')
 
-    def owner_phone(self, instance):
-        return instance.owner.pure_phone
-    owner_phone.short_description = _('Телефон')
-
     def owner_pure_phone(self, instance):
-        return instance.owner.pure_phone
-    owner_pure_phone.short_description = _('Нормализованный телефон')
+        return instance.owner.pure_phone if instance and instance.owner else "-"
+    owner_pure_phone.short_description = _('Телефон')
 
 @admin.register(Flat)
 class FlatAdmin(admin.ModelAdmin):
@@ -75,7 +72,7 @@ class FlatAdmin(admin.ModelAdmin):
     search_fields = ['town', 'address', 'owners__full_name']
     list_filter = ['new_building', 'town', 'construction_year']
     readonly_fields = ['created_at']
-    inlines = [ComplaintInline, OwnerThroughInline]
+    inlines = [ComplaintInline, OwnerThroughInline, LikeInline]
     raw_id_fields = ['liked_by']
     filter_horizontal = ('liked_by',)
 

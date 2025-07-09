@@ -2,11 +2,12 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from phonenumber_field.modelfields import PhoneNumberField
-from phonenumbers import format_number, PhoneNumberFormat, parse, is_valid_number, NumberParseException
-from django.core.exceptions import ValidationError
-import re
+
 
 User = get_user_model()
+
+
+
 
 class Flat(models.Model):
     created_at = models.DateTimeField(
@@ -101,6 +102,9 @@ class Flat(models.Model):
         verbose_name = 'Квартира'
         verbose_name_plural = 'Квартиры'
 
+
+
+
 class Complaint(models.Model):
     user = models.ForeignKey(
         User,
@@ -130,6 +134,9 @@ class Complaint(models.Model):
         verbose_name = 'Жалоба'
         verbose_name_plural = 'Жалобы'
 
+
+
+
 class Owner(models.Model):
     full_name = models.CharField('ФИО владельца', max_length=200)
     pure_phone = PhoneNumberField(
@@ -146,7 +153,7 @@ class Owner(models.Model):
     )
 
     def __str__(self):
-        return f'{self.full_name} ({self.pure_phone if self.pure_phone else "нет телефона"})'
+        return self.full_name
 
     class Meta:
         verbose_name = 'Собственник'
