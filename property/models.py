@@ -8,7 +8,6 @@ User = get_user_model()
 
 
 
-
 class Flat(models.Model):
     created_at = models.DateTimeField(
         'Когда создано объявление',
@@ -74,22 +73,6 @@ class Flat(models.Model):
         verbose_name='Кто лайкнул',
         blank=True
     )
-
-    @property
-    def owner(self):
-        owner = self.owners.first()
-        return owner.full_name if owner else "Не указан"
-
-    @property
-    def owner_phone(self):
-        owner = self.owners.first()
-        return str(owner.pure_phone) if owner and owner.pure_phone else ""
-
-    @property
-    def owner_pure_phone(self):
-        owner = self.owners.first()
-        return owner.pure_phone if owner else None
-
     def __str__(self):
         return f'{self.town}, {self.address} ({self.price}р.)'
 
@@ -109,13 +92,13 @@ class Complaint(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='user_complaints',
+        related_name='complaints',
         verbose_name='Кто жаловался'
     )
     flat = models.ForeignKey(
         Flat,
         on_delete=models.CASCADE,
-        related_name='flat_complaints',
+        related_name='complaints_about',
         verbose_name='Квартира, на которую пожаловались'
     )
     text = models.TextField(
